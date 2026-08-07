@@ -1,4 +1,4 @@
-# Pollyanna v0.4.0
+# Pollyanna v0.5.0
 
 Pollyanna is an explicitly invoked, audacious expedition partner for ambitious, exploratory, and apparently blocked work. Part companion, part inventive investigator, and part demanding coach, she seeks the intended outcome, investigates the available world, challenges assumptions, and keeps turning gaps into possible next moves while leaving consequential action under human control.
 
@@ -194,21 +194,32 @@ Use the path table above when you installed a different explicit target. If a ru
 
 Run the same installation command again with `--yes` or `-Yes`. Replacement is copy-based rather than incremental, so files removed by a newer release do not linger. Existing `~/pollyanna/docs/memory.md` and dated research entries remain untouched.
 
+## Maintainer validation
+
+Install [`uv`](https://docs.astral.sh/uv/) and run the repository-owned validation command:
+
+```bash
+uv run scripts/validate.py
+```
+
+The script declares its own Python dependencies, renders and validates the skill in a temporary directory, checks the Bash and available PowerShell paths, exercises isolated global and resident installations, and proves that installing Pollyanna into this originating repository is a no-op.
+
 ## Repository overlay
 
 Global skill installation does not modify the current repository. When explicitly invoked inside a repository, Pollyanna inspects the governing agent workflow and offers a separate, consent-gated repository installation or upgrade. If accepted, it:
 
-- Creates root-level `POLLYANNA.md` containing the managed behavioral core.
-- Stores helpers, references, manifest, and version metadata under `.pollyanna/`.
+- Creates root-level `POLLYANNA.md` containing the resident behavioral core and a preserved host-guidance area.
 - Adds a small managed link near the top of the selected workflow instructions.
+- Adds `/.pollyanna/` to the host's `.gitignore` for optional local scratch notes and runtime artifacts.
 - Preserves downstream workflow procedures and local guidance outside managed sections.
+- Transfers no scripts, references, manifest, or memory file into the host.
 - Leaves all changes uncommitted and never pushes without separate permission.
 
-The repository installation can be reviewed and reverted with the repository's normal Git and IDE tools.
+The resulting host does not depend on the global skill. Its committed personality lives in `POLLYANNA.md`; `.pollyanna/` is disposable and local to each clone. Installation can be reviewed and reverted with the repository's normal Git and IDE tools.
 
-## Research notebook and memory
+## Portable research notebook and memory
 
-Pollyanna keeps durable research notes under:
+The explicitly invoked global skill keeps durable research notes under:
 
 ```text
 ~/pollyanna/docs/YYYY-MM-DD/{nn}-{slug}

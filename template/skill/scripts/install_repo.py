@@ -2,18 +2,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 
 
 VERSION = "__PRODUCT_VERSION__"
-CORE_START = "<!-- pollyanna:core:start -->"
-CORE_END = "<!-- pollyanna:core:end -->"
 MANAGED_END = "<!-- pollyanna:managed:end -->"
 HOOK_END = "<!-- pollyanna:hook:end -->"
+IGNORE_RULE = "/.pollyanna/"
 MANAGED_RE = re.compile(
     r"<!-- pollyanna:managed:start version=(?P<version>[^ ]+) -->(?P<body>.*?)"
     r"<!-- pollyanna:managed:end -->",
@@ -30,6 +29,16 @@ WORKFLOW_CANDIDATES = (
     ".github/copilot-instructions.md",
     ".cursorrules",
 )
+SCAN_EXCLUDED_DIRS = {
+    ".git",
+    ".pollyanna",
+    ".venv",
+    "build",
+    "dist",
+    "node_modules",
+    "vendor",
+}
+MAX_INSTRUCTION_BYTES = 2 * 1024 * 1024
 
 
 def skill_root() -> Path:
@@ -52,106 +61,121 @@ def resolve_inside(repo: Path, value: str) -> Path:
     return candidate
 
 
-def read_manifest(repo: Path) -> dict[str, object] | None:
-    manifest_path = repo / ".pollyanna" / "manifest.json"
-    if not manifest_path.is_file():
-        return None
-    try:
-        value = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return value if isinstance(value, dict) else None
+def policy_source_path() -> Path:
+    rendered_asset = skill_root() / "assets" / "POLLYANNA.md"
+    if rendered_asset.is_file():
+        return rendered_asset
+    source_repo_policy = skill_root().parent.parent / "POLLYANNA.md"
+    if source_repo_policy.is_file():
+        return source_repo_policy
+    raise ValueError("Could not find the resident POLLYANNA.md policy source.")
 
 
-def installed_version(repo: Path) -> str | None:
-    manifest = read_manifest(repo)
-    if manifest and isinstance(manifest.get("version"), str):
-        return str(manifest["version"])
-    policy_path = repo / "POLLYANNA.md"
-    if policy_path.is_file():
-        match = MANAGED_RE.search(policy_path.read_text(encoding="utf-8"))
-        if match:
-            return match.group("version")
-    return None
+def desired_managed_block() -> tuple[str, re.Match[str]]:
+    text = policy_source_path().read_text(encoding="utf-8")
+    match = MANAGED_RE.search(text)
+    if not match:
+        raise ValueError("Resident policy source does not contain a valid managed block.")
+    if match.group("version") != VERSION:
+        raise ValueError("Resident policy version does not match the rendered skill version.")
+    return match.group(0), match
+
+
+def digest(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def version_tuple(value: str | None) -> tuple[int, ...]:
     if not value:
         return ()
-    parts = re.findall(r"\d+", value)
-    return tuple(int(part) for part in parts)
+    return tuple(int(part) for part in re.findall(r"\d+", value))
 
 
 def workflow_candidates(repo: Path) -> list[str]:
     return [name for name in WORKFLOW_CANDIDATES if (repo / name).is_file()]
 
 
+def discover_hook_files(repo: Path) -> list[str]:
+    discovered: set[str] = set()
+    for directory, directory_names, file_names in os.walk(repo):
+        directory_names[:] = [
+            name for name in directory_names if name not in SCAN_EXCLUDED_DIRS
+        ]
+        directory_path = Path(directory)
+        for file_name in file_names:
+            candidate = directory_path / file_name
+            try:
+                if candidate.is_symlink() or candidate.stat().st_size > MAX_INSTRUCTION_BYTES:
+                    continue
+                text = candidate.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if HOOK_RE.search(text):
+                discovered.add(candidate.relative_to(repo).as_posix())
+    return sorted(discovered)
+
+
+def ignore_rule_present(text: str | None) -> bool:
+    if text is None:
+        return False
+    accepted = {".pollyanna", ".pollyanna/", "/.pollyanna", "/.pollyanna/"}
+    return any(line.strip() in accepted for line in text.splitlines())
+
+
 def status(repo: Path) -> dict[str, object]:
+    desired_block, desired_match = desired_managed_block()
     policy_path = repo / "POLLYANNA.md"
-    current = installed_version(repo)
-    unmanaged_policy = policy_path.is_file() and not MANAGED_RE.search(
-        policy_path.read_text(encoding="utf-8")
-    )
+    policy_text = policy_path.read_text(encoding="utf-8") if policy_path.is_file() else None
+    installed_match = MANAGED_RE.search(policy_text) if policy_text is not None else None
+    current_version = installed_match.group("version") if installed_match else None
+    installed_body = installed_match.group("body") if installed_match else None
+    hooks = discover_hook_files(repo)
+    gitignore_path = repo / ".gitignore"
+    gitignore_text = gitignore_path.read_text(encoding="utf-8") if gitignore_path.is_file() else None
     candidates = workflow_candidates(repo)
     return {
         "repo_root": str(repo),
         "available_version": VERSION,
-        "installed": policy_path.is_file() or (repo / ".pollyanna").is_dir(),
-        "installed_version": current,
-        "upgrade_available": bool(current and version_tuple(VERSION) > version_tuple(current)),
-        "unmanaged_policy": unmanaged_policy,
+        "available_core_sha256": digest(desired_match.group("body")),
+        "installed": installed_match is not None,
+        "installed_version": current_version,
+        "installed_core_sha256": digest(installed_body) if installed_body is not None else None,
+        "policy_aligned": bool(installed_match and installed_match.group(0) == desired_block),
+        "upgrade_available": bool(
+            current_version and version_tuple(VERSION) > version_tuple(current_version)
+        ),
+        "content_update_available": bool(
+            installed_match and installed_match.group(0) != desired_block
+        ),
+        "unmanaged_policy": bool(policy_text is not None and installed_match is None),
+        "gitignore_aligned": ignore_rule_present(gitignore_text),
         "workflow_candidates": candidates,
-        "suggested_workflow_files": candidates[:1] or ["AGENTS.md"],
+        "workflow_hooks": hooks,
+        "suggested_workflow_files": hooks or candidates[:1] or ["AGENTS.md"],
     }
 
 
-def extract_core() -> str:
-    source_path = skill_root() / "SKILL.md"
-    if source_path.is_file():
-        text = source_path.read_text(encoding="utf-8")
-        start = text.find(CORE_START)
-        end = text.find(CORE_END)
-        if start >= 0 and end > start:
-            return text[start + len(CORE_START) : end].strip()
-
-    installed_policy = skill_root().parent / "POLLYANNA.md"
-    if installed_policy.is_file():
-        match = MANAGED_RE.search(installed_policy.read_text(encoding="utf-8"))
-        if match:
-            return match.group("body").strip()
-    raise ValueError("Could not find a valid Pollyanna behavioral core.")
-
-
-def managed_policy_block() -> str:
-    return (
-        f"<!-- pollyanna:managed:start version={VERSION} -->\n"
-        f"{extract_core()}\n"
-        f"{MANAGED_END}"
-    )
-
-
 def render_policy(existing: str | None, adopt_existing: bool) -> str:
-    managed = managed_policy_block()
+    managed, _match = desired_managed_block()
     if existing is None:
         return (
             "# Pollyanna\n\n"
             f"{managed}\n\n"
             "## Repository-specific guidance\n\n"
-            "Add local refinements here. Content outside the managed block is preserved during upgrades.\n"
+            "Add durable host refinements here. Content outside the managed block is preserved during upgrades.\n"
         )
     if MANAGED_RE.search(existing):
-        rendered = MANAGED_RE.sub(lambda _match: managed, existing, count=1)
+        rendered = MANAGED_RE.sub(lambda _existing: managed, existing, count=1)
         return rendered if rendered.endswith("\n") else rendered + "\n"
     if not adopt_existing:
         raise ValueError(
             "An unmanaged POLLYANNA.md already exists. Inspect it and rerun with --adopt-existing only after the user approves adoption."
         )
-    preserved = existing.strip()
     return (
         "# Pollyanna\n\n"
         f"{managed}\n\n"
         "## Preserved local guidance\n\n"
-        f"{preserved}\n"
+        f"{existing.strip()}\n"
     )
 
 
@@ -176,10 +200,7 @@ def insert_near_top(text: str, hook: str) -> str:
         index += 1
     if index < len(lines) and lines[index].lstrip().startswith("#"):
         index += 1
-    before = lines[:index]
-    after = lines[index:]
-    rendered = before + ["", hook, ""] + after
-    return "\n".join(rendered).rstrip() + "\n"
+    return "\n".join(lines[:index] + ["", hook, ""] + lines[index:]).rstrip() + "\n"
 
 
 def render_workflow(existing: str | None, workflow_path: Path, repo: Path) -> str:
@@ -187,11 +208,16 @@ def render_workflow(existing: str | None, workflow_path: Path, repo: Path) -> st
     if existing is None:
         return f"# Repository instructions\n\n{hook}\n"
     if HOOK_RE.search(existing):
-        rendered = HOOK_RE.sub(lambda _match: hook, existing, count=1)
+        rendered = HOOK_RE.sub(lambda _existing: hook, existing, count=1)
         return rendered if rendered.endswith("\n") else rendered + "\n"
-    if "POLLYANNA.md" in existing:
-        return existing if existing.endswith("\n") else existing + "\n"
     return insert_near_top(existing, hook)
+
+
+def render_gitignore(existing: str | None) -> str:
+    if ignore_rule_present(existing):
+        return existing or ""
+    base = (existing or "").rstrip("\n")
+    return f"{base}\n{IGNORE_RULE}\n" if base else f"{IGNORE_RULE}\n"
 
 
 def write_atomic(path: Path, content: str) -> None:
@@ -203,131 +229,88 @@ def write_atomic(path: Path, content: str) -> None:
     os.replace(temporary, path)
 
 
-def stage_support(repo: Path, workflow_files: list[str]) -> tuple[Path, Path | None]:
-    source = skill_root()
-    destination = repo / ".pollyanna"
-    stage = repo / f".pollyanna.new.{os.getpid()}"
-    backup = repo / f".pollyanna.previous.{os.getpid()}"
-    if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
-        raise ValueError(f"Repository support path must be a normal directory: {destination}")
-    for stale in (stage, backup):
-        if stale.exists():
-            shutil.rmtree(stale)
-    if destination.exists():
-        shutil.copytree(destination, stage)
-    else:
-        stage.mkdir(parents=True)
-    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo")
-    for folder_name in ("scripts", "references"):
-        source_folder = source / folder_name
-        if source_folder.is_dir():
-            staged_folder = stage / folder_name
-            if staged_folder.exists():
-                shutil.rmtree(staged_folder)
-            shutil.copytree(source_folder, stage / folder_name, dirs_exist_ok=True, ignore=ignore)
-    manifest = {
-        "name": "pollyanna",
-        "version": VERSION,
-        "policy_file": "POLLYANNA.md",
-        "workflow_files": workflow_files,
-        "managed_directories": ["scripts", "references"],
-    }
-    (stage / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    if destination.exists():
-        os.replace(destination, backup)
-    try:
-        os.replace(stage, destination)
-    except Exception:
-        if backup.exists():
-            os.replace(backup, destination)
-        raise
-    return destination, backup if backup.exists() else None
-
-
-def restore_file(path: Path, previous: bytes | None) -> None:
+def restore_file(path: Path, previous: bytes | None, mode: int | None) -> None:
     if previous is None:
         if path.exists():
             path.unlink()
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(previous)
+    if mode is not None:
+        os.chmod(path, mode)
 
 
-def install(
-    repo: Path,
-    workflow_values: list[str],
-    adopt_existing: bool,
-) -> dict[str, object]:
-    selected = workflow_values or workflow_candidates(repo)[:1] or ["AGENTS.md"]
+def install(repo: Path, workflow_values: list[str], adopt_existing: bool) -> dict[str, object]:
+    existing_hooks = discover_hook_files(repo)
+    if workflow_values:
+        selected = [*existing_hooks, *workflow_values]
+    else:
+        selected = existing_hooks or workflow_candidates(repo)[:1] or ["AGENTS.md"]
     selected = list(dict.fromkeys(selected))
     workflow_paths = [resolve_inside(repo, value) for value in selected]
+
     policy_path = repo / "POLLYANNA.md"
     policy_existing = policy_path.read_text(encoding="utf-8") if policy_path.is_file() else None
-    policy_rendered = render_policy(policy_existing, adopt_existing)
-
-    rendered_workflows: dict[Path, str] = {}
+    rendered: dict[Path, str] = {
+        policy_path: render_policy(policy_existing, adopt_existing),
+    }
     for workflow_path in workflow_paths:
         existing = workflow_path.read_text(encoding="utf-8") if workflow_path.is_file() else None
-        rendered_workflows[workflow_path] = render_workflow(existing, workflow_path, repo)
+        rendered[workflow_path] = render_workflow(existing, workflow_path, repo)
+    gitignore_path = repo / ".gitignore"
+    gitignore_existing = gitignore_path.read_text(encoding="utf-8") if gitignore_path.is_file() else None
+    rendered[gitignore_path] = render_gitignore(gitignore_existing)
 
     changed_paths = [
         path
-        for path, rendered in [(policy_path, policy_rendered), *rendered_workflows.items()]
-        if not path.is_file() or path.read_text(encoding="utf-8") != rendered
+        for path, content in rendered.items()
+        if not path.is_file() or path.read_text(encoding="utf-8") != content
     ]
-    previous_files = {
-        path: path.read_bytes() if path.is_file() else None
-        for path in [policy_path, *workflow_paths]
+    previous = {
+        path: (
+            path.read_bytes() if path.is_file() else None,
+            path.stat().st_mode if path.is_file() else None,
+        )
+        for path in changed_paths
     }
-    destination, backup = stage_support(repo, selected)
     try:
-        write_atomic(policy_path, policy_rendered)
-        for workflow_path, rendered in rendered_workflows.items():
-            write_atomic(workflow_path, rendered)
+        for path in changed_paths:
+            write_atomic(path, rendered[path])
     except Exception:
-        for path, previous in previous_files.items():
-            restore_file(path, previous)
-        if destination.exists():
-            shutil.rmtree(destination)
-        if backup and backup.exists():
-            os.replace(backup, destination)
+        for path, (content, mode) in previous.items():
+            restore_file(path, content, mode)
         raise
-    if backup and backup.exists():
-        shutil.rmtree(backup)
 
     return {
         "repo_root": str(repo),
         "version": VERSION,
         "policy_file": str(policy_path),
-        "support_dir": str(destination),
+        "gitignore_file": str(gitignore_path),
         "workflow_files": [str(path) for path in workflow_paths],
-        "changed_files": [str(path) for path in changed_paths] + [str(destination)],
+        "changed_files": [str(path) for path in changed_paths],
+        "no_op": not changed_paths,
     }
 
 
 def emit(value: object, as_json: bool) -> None:
     if as_json:
         print(json.dumps(value, indent=2, sort_keys=True))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            print(f"{key}={item}")
     else:
-        if isinstance(value, dict):
-            for key, item in value.items():
-                print(f"{key}={item}")
-        else:
-            print(value)
+        print(value)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Inspect, install, or upgrade Pollyanna in a repository.")
+    parser = argparse.ArgumentParser(description="Inspect, install, or upgrade Pollyanna in a host repository.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    status_parser = subparsers.add_parser("status", help="Inspect a repository for Pollyanna integration.")
+    status_parser = subparsers.add_parser("status", help="Inspect a repository for resident Pollyanna integration.")
     status_parser.add_argument("--repo-root", required=True)
     status_parser.add_argument("--json", action="store_true")
 
-    install_parser = subparsers.add_parser("install", help="Install or upgrade Pollyanna after user approval.")
+    install_parser = subparsers.add_parser("install", help="Install or upgrade resident Pollyanna after user approval.")
     install_parser.add_argument("--repo-root", required=True)
     install_parser.add_argument(
         "--workflow-file",
@@ -348,10 +331,9 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     repo = resolve_repo(args.repo_root)
-    if args.command == "status":
-        result = status(repo)
-    else:
-        result = install(repo, args.workflow_file, args.adopt_existing)
+    result = status(repo) if args.command == "status" else install(
+        repo, args.workflow_file, args.adopt_existing
+    )
     emit(result, args.json)
     return 0
 

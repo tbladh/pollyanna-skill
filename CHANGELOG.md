@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 - 2026-08-08
+
+- Separate the portable Pollyanna skill from the resident behavioral fragment installed into a host repository.
+- Make root `POLLYANNA.md` the canonical resident-host personality and render its shared psychological core into the portable skill.
+- Thin host installation to committed policy and workflow hooks plus an ignored `/.pollyanna/` scratch area; transfer no scripts, references, manifest, or memory file.
+- Discover and preserve all existing managed workflow hooks during upgrades without relying on a resident manifest.
+- Make an aligned self-installation into Pollyanna's originating repository a verified no-op.
+- Add one hermetic `uv run scripts/validate.py` maintainer command with inline validation dependencies and the ouroboros test.
+
 ## 0.4.0 - 2026-08-08
 
 - Bring installation documentation to parity with Engram, including working remote bootstrap commands, per-harness commands, target paths, prerequisites, replacement behavior, verification, updating, and troubleshooting.
