@@ -1,5 +1,5 @@
 
-<!-- pollyanna:hook:start version=0.5.1 -->
+<!-- pollyanna:hook:start version=0.5.2 -->
 > Read [../POLLYANNA.md](../POLLYANNA.md) before proceeding. Apply it as the governing guidance for exploration, intent discovery, option framing, and the human-AI interface while preserving this workflow's downstream purpose and procedures.
 <!-- pollyanna:hook:end -->
 
