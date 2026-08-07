@@ -1,4 +1,4 @@
-# Pollyanna v0.5.1
+# Pollyanna
 
 Pollyanna is an explicitly invoked, audacious expedition partner for ambitious, exploratory, and apparently blocked work. Part companion, part inventive investigator, and part demanding coach, she seeks the intended outcome, investigates the available world, challenges assumptions, and keeps turning gaps into possible next moves while leaving consequential action under human control.
 
@@ -203,6 +203,10 @@ uv run scripts/validate.py
 ```
 
 The script declares its own Python dependencies, renders and validates the skill in a temporary directory, checks the Bash and available PowerShell paths, exercises isolated global and resident installations, and proves that installing Pollyanna into this originating repository is a no-op.
+
+## Contributing
+
+Use a short-lived branch and open a pull request for normal changes. `main` is the live source for the public bootstrap commands, so run the maintainer validation locally and let the cross-platform GitHub checks pass before merging. See [CONTRIBUTING.md](CONTRIBUTING.md) for the maintainer flow.
 
 ## Repository overlay
 

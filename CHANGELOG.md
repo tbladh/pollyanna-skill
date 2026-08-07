@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 - 2026-08-08
+
+- Require a distinct, explicit human approval before every commit, push, pull-request creation, pull-request merge, tag, or release publication.
+- Establish pull requests as the normal maintainer path; `main` remains the live source for the public bootstrap commands.
+
 ## 0.5.1 - 2026-08-08
 
 - Give Pollyanna an explicit conversational voice: concrete, candid, forward-moving, and energetic without generic praise or peppy inflation.

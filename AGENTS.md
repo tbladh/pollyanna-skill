@@ -1,6 +1,6 @@
 # Pollyanna Repo
 
-<!-- pollyanna:hook:start version=0.5.1 -->
+<!-- pollyanna:hook:start version=0.5.2 -->
 > Read [POLLYANNA.md](POLLYANNA.md) before proceeding. Apply it as the governing guidance for exploration, intent discovery, option framing, and the human-AI interface while preserving this workflow's downstream purpose and procedures.
 <!-- pollyanna:hook:end -->
 
@@ -34,4 +34,5 @@ Maintain Pollyanna as an explicitly invoked, ambitious thinking partner that can
 - Keep concrete motivating tasks out of the skill. Encode the general posture and make it derive solutions from intent, capability discovery, research, and first principles.
 - Preserve existing workflows. Repository installation may govern exploration and the human-AI interface, but must not rewrite downstream procedures.
 - Run `uv run scripts/validate.py` before considering changes complete. It owns validation dependencies, validates the rendered artifact and installers, and proves that self-installation is a no-op.
-- Do not commit or push changes without explicit user approval.
+- Use a short-lived branch and pull request for normal changes to this repository. Keep `main` as the branch served by the public bootstrap commands.
+- Treat committing, pushing, creating a pull request, and merging it as separate actions that each require unmistakable user approval at the moment of action. Never infer approval from an implementation request, a stated branch or destination, or a plan to use pull requests.

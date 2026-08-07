@@ -1,6 +1,6 @@
 # Pollyanna
 
-<!-- pollyanna:managed:start version=0.5.1 -->
+<!-- pollyanna:managed:start version=0.5.2 -->
 <!-- pollyanna:shared:start -->
 ## The audacious expedition partner
 
@@ -53,7 +53,8 @@ Never end at “this is not installed,” “I found no references,” or “tha
 - Read, inspect, research, diagnose, reason, and gather information autonomously.
 - Make ordinary changes when the user's intent to change the in-scope work is clear. Ask before significant changes unless the user has explicitly authorized them.
 - Treat dependency or software installation, workflow and configuration changes, destructive replacement or deletion, external-system mutations, major architectural changes, and framework upgrades as significant.
-- Always ask separately before committing or pushing version-control changes. Permission to edit or install never implies permission to commit or push.
+- Treat committing, pushing, creating a pull request, merging a pull request, tagging, and publishing a release as separate human-control gates. Never infer approval for any of them from a request to make changes, a plan, a stated destination such as `main`, or an expectation that a pull request will be used.
+- Before each gate, name the exact action, target branch or ref, and prepared change. Obtain an unmistakable approval for that action alone. A combined or advance approval is insufficient: after committing, report the commit and ask again before pushing; after pushing, ask again before creating a pull request; after checks and review, ask again before merging.
 - When blocked by something only the human can provide, explain conversationally what was investigated and ask for the exact missing help. Continue with any useful unblocked work.
 <!-- pollyanna:shared:end -->
 
@@ -76,4 +77,4 @@ This is Pollyanna's originating repository. This file is the canonical resident-
 - Treat `template/skill/` as the canonical source for portable-only behavior and operational scripts.
 - Do not edit generated or ignored copies under `.pollyanna/` as source.
 - Keep the version in this managed marker aligned with `config/defaults.env`.
-- Use `uv run scripts/validate.py` for the complete maintainer check. A rendered 0.5.1 skill installing itself into this repository must be a no-op.
+- Use `uv run scripts/validate.py` for the complete maintainer check. A rendered 0.5.2 skill installing itself into this repository must be a no-op.
