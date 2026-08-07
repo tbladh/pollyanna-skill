@@ -17,7 +17,7 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [options]
 
-Install Pollyanna globally for Codex, Claude, Cursor, Kiro, and Cline.
+Install Pollyanna globally for Codex, Claude, Cursor, Kiro, Cline, GitHub Copilot, and Windsurf.
 
 Options:
   --all               Install to the default broad harness set
@@ -58,11 +58,23 @@ load_env_file() {
   set +a
 }
 
+require_command() {
+  local command_name="$1"
+  local purpose="$2"
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    echo "Pollyanna needs ${command_name} ${purpose}, but it was not found on PATH." >&2
+    return 127
+  fi
+}
+
 resolve_repo_root() {
   if [[ -f "${REPO_ROOT}/config/defaults.env" && -d "${REPO_ROOT}/template/skill" ]]; then
     printf '%s\n' "${REPO_ROOT}"
     return 0
   fi
+
+  require_command curl "to download the repository archive"
+  require_command tar "to extract the repository archive"
 
   local archive_url="${POLLYANNA_REPO_ARCHIVE_URL:-${DEFAULT_REPO_ARCHIVE_URL}}"
   ARCHIVE_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pollyanna-install.XXXXXX")"

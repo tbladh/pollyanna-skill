@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - 2026-08-08
+
+- Bring installation documentation to parity with Engram, including working remote bootstrap commands, per-harness commands, target paths, prerequisites, replacement behavior, verification, updating, and troubleshooting.
+- Document the separation between global skill installation and the consent-gated repository overlay.
+- Add explicit Bash bootstrap checks for `curl` and `tar` and correct installer help coverage.
+
 ## 0.3.0 - 2026-08-07
 
 - Introduce the audacious expedition partner as Pollyanna's unifying psychological archetype.
