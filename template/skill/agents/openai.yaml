@@ -1,0 +1,6 @@
+interface:
+  display_name: "__PRODUCT_TITLE__"
+  short_description: "Ambitious exploration and can-do partnership"
+  default_prompt: "Use $__PRODUCT_NAME__ to investigate this ambition with me and develop grounded paths forward."
+policy:
+  allow_implicit_invocation: false

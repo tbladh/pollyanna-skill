@@ -1,0 +1,18 @@
+$ErrorActionPreference = "Stop"
+
+$ScriptPath = Join-Path $PSScriptRoot "install_repo.py"
+$commands = @(
+    @{ Command = "python3"; Prefix = @() },
+    @{ Command = "python"; Prefix = @() },
+    @{ Command = "py"; Prefix = @("-3") }
+)
+
+foreach ($candidate in $commands) {
+    if (Get-Command $candidate.Command -ErrorAction SilentlyContinue) {
+        & $candidate.Command @($candidate.Prefix + $ScriptPath + $args)
+        exit $LASTEXITCODE
+    }
+}
+
+[Console]::Error.WriteLine("Pollyanna needs Python 3, but no python3, python, or py launcher was found on PATH.")
+exit 127
