@@ -124,7 +124,11 @@ def standard_validator_path() -> Path | None:
 
 
 def validate_python_syntax(repo_root: Path) -> None:
-    paths = [repo_root / "scripts/render_skill.py", repo_root / "scripts/validate.py"]
+    paths = [
+        repo_root / "scripts/bootstrap_smoke.py",
+        repo_root / "scripts/render_skill.py",
+        repo_root / "scripts/validate.py",
+    ]
     paths.extend(sorted((repo_root / "template/skill/scripts").glob("*.py")))
     for path in paths:
         compile(path.read_text(encoding="utf-8"), str(path), "exec")
@@ -156,6 +160,34 @@ def validate_powershell_syntax(repo_root: Path) -> bool:
         environment["POLLYANNA_VALIDATE_PATH"] = str(path)
         run_checked([pwsh, "-NoLogo", "-NoProfile", "-Command", parser], cwd=repo_root, env=environment)
     return True
+
+
+def validate_version_references(repo_root: Path) -> None:
+    config_match = re.search(
+        r"^PRODUCT_VERSION=(?P<version>[^\s]+)$",
+        (repo_root / "config/defaults.env").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    require(config_match is not None, "config/defaults.env must define PRODUCT_VERSION.")
+    version = config_match.group("version")
+
+    policy_match = re.search(
+        r"<!-- pollyanna:managed:start version=(?P<version>[^ ]+) -->",
+        (repo_root / "POLLYANNA.md").read_text(encoding="utf-8"),
+    )
+    require(policy_match is not None, "POLLYANNA.md must define a managed version.")
+    require(policy_match.group("version") == version, "Managed policy version does not match PRODUCT_VERSION.")
+
+    changelog_match = re.search(
+        r"^## (?P<version>[^\s]+) - ",
+        (repo_root / "CHANGELOG.md").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    require(changelog_match is not None, "CHANGELOG.md must begin with a versioned release entry.")
+    require(changelog_match.group("version") == version, "Latest changelog version does not match PRODUCT_VERSION.")
+
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    require(not re.search(r"^# Pollyanna v", readme, re.MULTILINE), "README.md must not carry a release version.")
 
 
 def load_json_result(result: subprocess.CompletedProcess[str], operation: str) -> dict[str, object]:
@@ -217,20 +249,34 @@ def validate_repo_installer(repo_root: Path, skill_root: Path, temporary_root: P
 
 
 def validate_global_installers(repo_root: Path, temporary_root: Path, powershell_available: bool) -> None:
+    default_skill_roots = (
+        ".agents/skills",
+        ".claude/skills",
+        ".cursor/skills",
+        ".kiro/skills",
+        ".cline/skills",
+    )
+
+    def require_default_install(install_home: Path, platform: str) -> None:
+        paths = [install_home / root / "pollyanna/SKILL.md" for root in default_skill_roots]
+        paths.extend(
+            (
+                install_home / ".agents/skills/pollyanna/assets/POLLYANNA.md",
+                install_home / "pollyanna/docs/memory.md",
+            )
+        )
+        for path in paths:
+            require(path.is_file(), f"{platform} global installer did not create {path}.")
+
     bash_home = temporary_root / "bash-home"
     bash_env = dict(os.environ)
     bash_env["POLLYANNA_INSTALL_HOME"] = str(bash_home)
     run_checked(
-        ["bash", str(repo_root / "install.sh"), "--codex", "--yes"],
+        ["bash", str(repo_root / "install.sh"), "--yes"],
         cwd=repo_root,
         env=bash_env,
     )
-    for path in (
-        bash_home / ".agents/skills/pollyanna/SKILL.md",
-        bash_home / ".agents/skills/pollyanna/assets/POLLYANNA.md",
-        bash_home / "pollyanna/docs/memory.md",
-    ):
-        require(path.is_file(), f"Bash global installer did not create {path}.")
+    require_default_install(bash_home, "Bash")
 
     if powershell_available:
         powershell_home = temporary_root / "powershell-home"
@@ -241,19 +287,13 @@ def validate_global_installers(repo_root: Path, temporary_root: Path, powershell
                 "-NoProfile",
                 "-File",
                 str(repo_root / "install.ps1"),
-                "-Codex",
                 "-Yes",
                 "-InstallHome",
                 str(powershell_home),
             ],
             cwd=repo_root,
         )
-        for path in (
-            powershell_home / ".agents/skills/pollyanna/SKILL.md",
-            powershell_home / ".agents/skills/pollyanna/assets/POLLYANNA.md",
-            powershell_home / "pollyanna/docs/memory.md",
-        ):
-            require(path.is_file(), f"PowerShell global installer did not create {path}.")
+        require_default_install(powershell_home, "PowerShell")
 
 
 def validate_executable_modes(repo_root: Path, skill_root: Path) -> None:
@@ -270,6 +310,8 @@ def validate_executable_modes(repo_root: Path, skill_root: Path) -> None:
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     checks = ["metadata", "Python syntax", "Bash syntax"]
+    validate_version_references(repo_root)
+    checks.append("version references")
     validate_python_syntax(repo_root)
     validate_shell_syntax(repo_root)
     powershell_available = validate_powershell_syntax(repo_root)
@@ -301,7 +343,13 @@ def main() -> int:
         validate_executable_modes(repo_root, skill_root)
         validate_repo_installer(repo_root, skill_root, temporary_root)
         validate_global_installers(repo_root, temporary_root, powershell_available)
-        checks.extend(["rendered artifact", "repository installer", "global installers", "ouroboros no-op"])
+        run_checked(
+            [sys.executable, str(repo_root / "scripts/bootstrap_smoke.py"), "bash", "--repo-root", str(repo_root)],
+            cwd=repo_root,
+        )
+        checks.extend(
+            ["rendered artifact", "repository installer", "global installers", "Bash bootstrap", "ouroboros no-op"]
+        )
 
     git = shutil.which("git")
     if git is not None:
