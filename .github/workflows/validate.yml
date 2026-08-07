@@ -1,0 +1,58 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  complete-validation:
+    name: Complete validation (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
+      - run: uv run scripts/validate.py
+
+  powershell-installer:
+    name: PowerShell installer (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install into an isolated home
+        shell: pwsh
+        run: |
+          $installHome = Join-Path $env:RUNNER_TEMP "pollyanna-windows-home"
+          & .\install.ps1 -Codex -Yes -InstallHome $installHome
+          $expected = @(
+            (Join-Path $installHome ".agents\skills\pollyanna\SKILL.md"),
+            (Join-Path $installHome ".agents\skills\pollyanna\assets\POLLYANNA.md"),
+            (Join-Path $installHome "pollyanna\docs\memory.md")
+          )
+          $missing = $expected | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
+          if ($missing) {
+            throw "Installer did not create: $($missing -join ', ')"
+          }
+
+  bash-installer:
+    name: Bash installer (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install into an isolated home
+        shell: bash
+        run: |
+          install_home="${RUNNER_TEMP}/pollyanna-macos-home"
+          POLLYANNA_INSTALL_HOME="${install_home}" bash install.sh --codex --yes
+          test -f "${install_home}/.agents/skills/pollyanna/SKILL.md"
+          test -f "${install_home}/.agents/skills/pollyanna/assets/POLLYANNA.md"
+          test -f "${install_home}/pollyanna/docs/memory.md"
