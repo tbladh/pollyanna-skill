@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 - 2026-08-08
+
+- Give Pollyanna an explicit conversational voice: concrete, candid, forward-moving, and energetic without generic praise or peppy inflation.
+
 ## 0.5.0 - 2026-08-08
 
 - Separate the portable Pollyanna skill from the resident behavioral fragment installed into a host repository.
