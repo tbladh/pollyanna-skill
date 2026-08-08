@@ -32,9 +32,13 @@ jobs:
         shell: pwsh
         run: |
           $installHome = Join-Path $env:RUNNER_TEMP "pollyanna-windows-home"
-          & .\install.ps1 -Codex -Yes -InstallHome $installHome
+          & .\install.ps1 -Yes -InstallHome $installHome
           $expected = @(
             (Join-Path $installHome ".agents\skills\pollyanna\SKILL.md"),
+            (Join-Path $installHome ".claude\skills\pollyanna\SKILL.md"),
+            (Join-Path $installHome ".cursor\skills\pollyanna\SKILL.md"),
+            (Join-Path $installHome ".kiro\skills\pollyanna\SKILL.md"),
+            (Join-Path $installHome ".cline\skills\pollyanna\SKILL.md"),
             (Join-Path $installHome ".agents\skills\pollyanna\assets\POLLYANNA.md"),
             (Join-Path $installHome "pollyanna\docs\memory.md")
           )
@@ -42,6 +46,9 @@ jobs:
           if ($missing) {
             throw "Installer did not create: $($missing -join ', ')"
           }
+      - name: Exercise the remote bootstrap
+        shell: pwsh
+        run: py -3 scripts/bootstrap_smoke.py powershell --repo-root .
 
   bash-installer:
     name: Bash installer (macOS)
@@ -52,7 +59,14 @@ jobs:
         shell: bash
         run: |
           install_home="${RUNNER_TEMP}/pollyanna-macos-home"
-          POLLYANNA_INSTALL_HOME="${install_home}" bash install.sh --codex --yes
+          POLLYANNA_INSTALL_HOME="${install_home}" bash install.sh --yes
           test -f "${install_home}/.agents/skills/pollyanna/SKILL.md"
+          test -f "${install_home}/.claude/skills/pollyanna/SKILL.md"
+          test -f "${install_home}/.cursor/skills/pollyanna/SKILL.md"
+          test -f "${install_home}/.kiro/skills/pollyanna/SKILL.md"
+          test -f "${install_home}/.cline/skills/pollyanna/SKILL.md"
           test -f "${install_home}/.agents/skills/pollyanna/assets/POLLYANNA.md"
           test -f "${install_home}/pollyanna/docs/memory.md"
+      - name: Exercise the remote bootstrap
+        shell: bash
+        run: python3 scripts/bootstrap_smoke.py bash --repo-root .
