@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 - 2026-08-08
+
+- Turn apparently unavailable dependencies into a concrete chain of functions, owners, sources, routes, constraints, and authorities to investigate.
+- Advance the strongest route toward a secured outcome while keeping credible alternatives alive, with explicit boundaries around external actions and commitments.
+
 ## 0.5.2 - 2026-08-08
 
 - Require a distinct, explicit human approval before every commit, push, pull-request creation, pull-request merge, tag, or release publication.
