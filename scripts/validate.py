@@ -127,6 +127,7 @@ def validate_python_syntax(repo_root: Path) -> None:
     paths = [
         repo_root / "scripts/bootstrap_smoke.py",
         repo_root / "scripts/render_skill.py",
+        repo_root / "scripts/token_cost.py",
         repo_root / "scripts/validate.py",
     ]
     paths.extend(sorted((repo_root / "template/skill/scripts").glob("*.py")))
@@ -297,7 +298,12 @@ def validate_global_installers(repo_root: Path, temporary_root: Path, powershell
 
 
 def validate_executable_modes(repo_root: Path, skill_root: Path) -> None:
-    paths = [repo_root / "install.sh", repo_root / "scripts/render_skill.py", repo_root / "scripts/validate.py"]
+    paths = [
+        repo_root / "install.sh",
+        repo_root / "scripts/render_skill.py",
+        repo_root / "scripts/token_cost.py",
+        repo_root / "scripts/validate.py",
+    ]
     paths.extend(
         path
         for path in (skill_root / "scripts").iterdir()
@@ -305,6 +311,20 @@ def validate_executable_modes(repo_root: Path, skill_root: Path) -> None:
     )
     for path in paths:
         require(os.access(path, os.X_OK), f"Expected executable file mode on {path}.")
+
+
+def validate_token_cost_calculator(repo_root: Path) -> None:
+    result = run_checked(
+        [sys.executable, str(repo_root / "scripts/token_cost.py"), "--repo-root", str(repo_root), "--json"],
+        cwd=repo_root,
+    )
+    report = load_json_result(result, "Token cost calculation")
+    for subject in ("installed_skill", "repo_merged_pollyanna"):
+        metrics = report.get(subject)
+        require(isinstance(metrics, dict), f"Token cost report is missing {subject}.")
+        for metric in ("characters", "words", "estimated_tokens"):
+            value = metrics.get(metric)
+            require(isinstance(value, int) and value > 0, f"Invalid {subject}.{metric} in token cost report.")
 
 
 def main() -> int:
@@ -341,6 +361,7 @@ def main() -> int:
             checks.append("standard skill validator")
 
         validate_executable_modes(repo_root, skill_root)
+        validate_token_cost_calculator(repo_root)
         validate_repo_installer(repo_root, skill_root, temporary_root)
         validate_global_installers(repo_root, temporary_root, powershell_available)
         run_checked(
@@ -348,7 +369,14 @@ def main() -> int:
             cwd=repo_root,
         )
         checks.extend(
-            ["rendered artifact", "repository installer", "global installers", "Bash bootstrap", "ouroboros no-op"]
+            [
+                "rendered artifact",
+                "token cost calculator",
+                "repository installer",
+                "global installers",
+                "Bash bootstrap",
+                "ouroboros no-op",
+            ]
         )
 
     git = shutil.which("git")
