@@ -4,7 +4,7 @@
 
 1. Create a branch from current `main`.
 2. Make one focused change.
-3. Run `uv run scripts/validate.py` locally.
+3. Run `uv run scripts/validate.py` locally and review any token-cost growth warning before proceeding.
 4. Push the branch and open a pull request.
 5. Let the GitHub checks pass on Linux, Windows, and macOS.
 6. Review the change, then merge the pull request.

@@ -214,6 +214,12 @@ python3 scripts/token_cost.py
 
 The report includes the rendered installed `SKILL.md` and the repository's merged `POLLYANNA.md`, with character and word counts plus an estimated token count. The estimate is `ceil(characters / 4)`, so use it for sizing rather than exact provider billing. Add `--json` for automation.
 
+Maintainer validation compares those counts with `main` (or `origin/main`) whenever that ref is available. It prints a warning when either prompt grows by at least 250 estimated tokens or 10%; warnings do not fail validation. To inspect the same comparison directly:
+
+```bash
+python3 scripts/token_cost.py --compare-ref main
+```
+
 ## Contributing
 
 Use a short-lived branch and open a pull request for normal changes. `main` is the live source for the public bootstrap commands, so run the maintainer validation locally and let the cross-platform GitHub checks pass before merging. See [CONTRIBUTING.md](CONTRIBUTING.md) for the maintainer flow.

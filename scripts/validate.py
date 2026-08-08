@@ -314,17 +314,42 @@ def validate_executable_modes(repo_root: Path, skill_root: Path) -> None:
 
 
 def validate_token_cost_calculator(repo_root: Path) -> None:
+    git = shutil.which("git")
+    comparison_ref: str | None = None
+    if git is not None:
+        for candidate in ("main", "origin/main"):
+            ref_check = subprocess.run(
+                [git, "rev-parse", "--verify", "--quiet", candidate],
+                cwd=repo_root,
+                capture_output=True,
+                check=False,
+            )
+            if ref_check.returncode == 0:
+                comparison_ref = candidate
+                break
+    command = [sys.executable, str(repo_root / "scripts/token_cost.py"), "--repo-root", str(repo_root), "--json"]
+    if comparison_ref is not None:
+        command.extend(("--compare-ref", comparison_ref))
     result = run_checked(
-        [sys.executable, str(repo_root / "scripts/token_cost.py"), "--repo-root", str(repo_root), "--json"],
+        command,
         cwd=repo_root,
     )
-    report = load_json_result(result, "Token cost calculation")
+    output = load_json_result(result, "Token cost calculation")
+    report = output.get("current")
+    require(isinstance(report, dict), "Token cost report is missing current metrics.")
     for subject in ("installed_skill", "repo_merged_pollyanna"):
         metrics = report.get(subject)
         require(isinstance(metrics, dict), f"Token cost report is missing {subject}.")
         for metric in ("characters", "words", "estimated_tokens"):
             value = metrics.get(metric)
             require(isinstance(value, int) and value > 0, f"Invalid {subject}.{metric} in token cost report.")
+    if comparison_ref is not None:
+        require(output.get("comparison_ref") == comparison_ref, "Token cost report used the wrong comparison ref.")
+    warnings = output.get("warnings")
+    require(isinstance(warnings, list), "Token cost report is missing growth warnings.")
+    for warning in warnings:
+        require(isinstance(warning, str), "Token cost report contains an invalid growth warning.")
+        print(f"Token cost warning: {warning}")
 
 
 def main() -> int:
